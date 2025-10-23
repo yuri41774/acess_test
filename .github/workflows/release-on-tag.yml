@@ -1,0 +1,95 @@
+name: Release on Tag (Windows build)
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  release-windows:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build Windows artifact
+        run: npm run dist:win
+
+      - name: Determine tag range
+        id: tag_range
+        run: |
+          git fetch --tags --prune || true
+          TAG=${GITHUB_REF##*/}
+          echo "Current tag: $TAG"
+          PREV_TAG=$(git tag --sort=-creatordate | grep -v "^$TAG$" | sed -n '1p' || true)
+          echo "PREV_TAG=$PREV_TAG" >> $GITHUB_ENV
+          echo "CURRENT_TAG=$TAG" >> $GITHUB_ENV
+          if [ -n "$PREV_TAG" ]; then
+            BASE_SHA=$(git rev-list -n 1 $PREV_TAG)
+          else
+            BASE_SHA=$(git rev-list --max-parents=0 HEAD)
+          fi
+          HEAD_SHA=$(git rev-list -n 1 $TAG)
+          echo "BASE_SHA=$BASE_SHA" >> $GITHUB_ENV
+          echo "HEAD_SHA=$HEAD_SHA" >> $GITHUB_ENV
+
+      - name: Generate changelog (node script)
+        run: |
+          node ./tools/release/generate-changelog.js
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          BASE_SHA: ${{ env.BASE_SHA }}
+          HEAD_SHA: ${{ env.HEAD_SHA }}
+
+
+      - name: Create GitHub Release
+        id: create_release
+        uses: actions/create-release@v1
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body: |
+            ${{ (join(fromJson('[]'), '')) }}
+          draft: false
+          prerelease: false
+
+      - name: Read changelog
+        id: read_changelog
+        run: |
+          if [ -f changelog.txt ]; then
+            echo "body<<EOF" >> $GITHUB_OUTPUT
+            cat changelog.txt >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "body=No changelog available" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Attach changelog to release
+        uses: peter-evans/create-or-update-release@v4
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body: ${{ steps.read_changelog.outputs.body }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload release assets
+        uses: softprops/action-gh-release@v1
+        with:
+          files: |
+            dist/*.exe
+            dist/*.zip
+            dist/*.nsis.*
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

@@ -1,0 +1,791 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Teste de Acessibilidade Interativo</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.7.0/axe.min.js"></script>
+  <!--
+    Melhorias aplicadas v2:
+    - Layout responsivo com grid e container centralizado
+    - Marcação semântica (header, main, footer)
+    - Link "pular para o conteúdo" para acessibilidade por teclado
+    - Melhores estilos para foco, contraste e tipografia
+    - Mantidos IDs e funções JS existentes
+    - Mensagem de feedback com classes de sucesso/erro
+    Novas melhorias:
+    - Modo escuro automático e manual
+    - Visualização de telas já adicionadas
+    - Exportação CSV
+    - Validações automáticas com axe-core
+    - Armazenamento local (localStorage)
+    - Atalhos de teclado
+  -->
+  <style>
+    /* Reset e variáveis */
+    *, *::before, *::after { box-sizing: border-box; }
+    :root {
+      /* Tema claro (padrão) */
+      --bg: #ffffff;
+      --text: #222831;
+      --muted: #555b6e;
+      --accent: #2c7be5;
+      --surface: #f7f9fc;
+      --success-bg: #d4edda;
+      --error-bg: #f8d7da;
+      --border: #d1d5db;
+      --focus: rgba(44,123,229,0.18);
+      --shadow: rgba(16,24,40,0.06);
+    }
+    
+    /* Tema escuro */
+    [data-theme="dark"] {
+      --bg: #1a1b1e;
+      --text: #e9ecef;
+      --muted: #868e96;
+      --accent: #4dabf7;
+      --surface: #141517;
+      --success-bg: #064e3b;
+      --error-bg: #7f1d1d;
+      --border: #2c2e33;
+      --focus: rgba(77,171,247,0.2);
+      --shadow: rgba(0,0,0,0.2);
+    }
+    
+    /* Preferência do sistema */
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) {
+        --bg: #1a1b1e;
+        --text: #e9ecef;
+        --muted: #868e96;
+        --accent: #4dabf7;
+        --surface: #141517;
+        --success-bg: #064e3b;
+        --error-bg: #7f1d1d;
+        --border: #2c2e33;
+        --focus: rgba(77,171,247,0.2);
+        --shadow: rgba(0,0,0,0.2);
+      }
+    }
+
+    /* Base */
+    html,body { height: 100%; }
+    body {
+      font-family: Inter, system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', Arial;
+      margin: 0;
+      background: var(--surface);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      padding: 16px;
+    }
+    .container {
+      max-width: 980px;
+      margin: 0 auto;
+      background: var(--bg);
+      padding: 20px 24px;
+      border-radius: 10px;
+      box-shadow: 0 1px 3px rgba(16,24,40,0.06);
+    }
+    header h1 { margin: 0 0 8px 0; font-size: 1.4rem; }
+    h2 { color: #2c3e50; margin-top: 18px; }
+    .intro { color: var(--muted); margin-bottom: 10px; }
+    label { font-weight: 600; display: block; margin-bottom: 6px; }
+    input[type="text"], textarea, select {
+      width: 100%;
+      padding: 10px 12px;
+      border: 1px solid #d1d5db;
+      border-radius: 6px;
+      background: #fff;
+      color: var(--text);
+      resize: vertical;
+      font-size: 0.95rem;
+    }
+    textarea { min-height: 84px; }
+    .info { font-size: 0.9rem; color: var(--muted); margin-bottom: 6px; }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px 18px;
+      align-items: start;
+    }
+    .full { grid-column: 1 / -1; }
+    .actions { margin-top: 14px; display: flex; gap: 10px; flex-wrap: wrap; }
+    button {
+      appearance: none;
+      border: none;
+      background: var(--accent);
+      color: #fff;
+      padding: 10px 16px;
+      border-radius: 8px;
+      font-size: 0.95rem;
+      cursor: pointer;
+    }
+    button.secondary { background: #6c757d; }
+    button:focus { outline: 3px solid rgba(44,123,229,0.18); }
+    #feedbackMessage {
+      font-size: 0.95rem;
+      padding: 10px;
+      margin-top: 12px;
+      border-radius: 6px;
+      display: none;
+    }
+  #feedbackMessage.sucesso { background: var(--success-bg); color: #155724; border: 1px solid #c3e6cb; }
+  #feedbackMessage.erro { background: var(--error-bg); color: #721c24; border: 1px solid #f5c6cb; }
+  /* estilo para mensagens informativas */
+  #feedbackMessage.info { background: var(--surface); color: var(--muted); border: 1px solid var(--border); }
+    /* Skip link */
+    .skip-link {
+      position: absolute;
+      left: -999px;
+      top: auto;
+      width: 1px;
+      height: 1px;
+      overflow: hidden;
+    }
+    .skip-link:focus {
+      left: 16px;
+      top: 16px;
+      width: auto;
+      height: auto;
+      padding: 8px 12px;
+      background: #000;
+      color: #fff;
+      border-radius: 6px;
+      z-index: 9999;
+    }
+    footer { margin-top: 20px; color: var(--muted); font-size: 0.9rem; }
+    @media (max-width: 720px) {
+      .grid { grid-template-columns: 1fr; }
+      .container { padding: 16px; }
+    }
+    @media (prefers-contrast: more) { 
+      button { box-shadow: 0 0 0 3px #000 inset; }
+      .info { color: #000; }
+    }
+
+    /* Novos componentes */
+    .theme-toggle {
+      position: fixed;
+      top: 16px;
+      right: 16px;
+      padding: 8px;
+      border-radius: 50%;
+      background: var(--bg);
+      border: 2px solid var(--border);
+      color: var(--text);
+      cursor: pointer;
+      box-shadow: 0 2px 4px var(--shadow);
+      transition: all 0.2s ease;
+      z-index: 100;
+    }
+    .theme-toggle:hover { transform: scale(1.1); }
+    
+    .telas-lista {
+      margin-top: 24px;
+      border-top: 2px solid var(--border);
+      padding-top: 24px;
+    }
+    .tela-item {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 16px;
+      margin-bottom: 12px;
+    }
+    .tela-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+    .tela-titulo { margin: 0; font-size: 1.1rem; }
+    .tela-acoes { display: flex; gap: 8px; }
+    .tela-conteudo {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+      gap: 12px;
+    }
+    .tela-campo {
+      background: var(--bg);
+      padding: 12px;
+      border-radius: 6px;
+    }
+    .tela-campo h4 { margin: 0 0 8px 0; font-size: 0.9rem; }
+    .tela-campo p { margin: 0; color: var(--muted); font-size: 0.9rem; }
+    
+    .status-check {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 8px;
+      border-radius: 12px;
+      font-size: 0.85rem;
+    }
+    .status-check.ok { background: var(--success-bg); color: #10b981; }
+    .status-check.warn { background: #fef3c7; color: #d97706; }
+    .status-check.error { background: var(--error-bg); color: #ef4444; }
+
+    .atalhos {
+      position: fixed;
+      bottom: 16px;
+      right: 16px;
+      background: var(--bg);
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px var(--shadow);
+      border: 1px solid var(--border);
+      max-width: 300px;
+      font-size: 0.9rem;
+      display: none;
+    }
+    .atalhos.visible { display: block; }
+    .atalhos kbd {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 4px;
+      padding: 2px 6px;
+      font-size: 0.85rem;
+    }
+    /* Estilos do modal de confirmação */
+    .confirm-overlay {
+      position: fixed;
+      inset: 0;
+      display: none; /* escondido por padrão; respeita atributo [hidden] */
+      align-items: center;
+      justify-content: center;
+      background: rgba(0,0,0,0.35);
+      z-index: 2000;
+    }
+    .confirm-overlay:not([hidden]) {
+      display: flex;
+    }
+    .confirm-modal {
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px;
+      border-radius: 8px;
+      max-width: 420px;
+      width: 90%;
+      box-shadow: 0 6px 18px rgba(0,0,0,0.2);
+      border: 1px solid var(--border);
+    }
+  </style>
+</head>
+<body>
+  <button class="theme-toggle" aria-label="Alternar tema claro/escuro" onclick="toggleTheme()">
+    <span id="themeIcon">🌞</span>
+  </button>
+
+  <a class="skip-link" href="#mainContent">Pular para o conteúdo</a>
+  <div class="container">
+    <header>
+      <h1>🧪 Roteiro de Teste de Acessibilidade Interativo</h1>
+      <p class="intro">Preencha os campos abaixo para registrar observações e gerar um relatório de acessibilidade.</p>
+      
+      <div class="status-check ok">
+        <span>Validação automática em execução</span>
+      </div>
+    </header>
+
+    <main id="mainContent">
+      <h2>📋 Informações da Tela</h2>
+
+      <form id="formTela" onsubmit="event.preventDefault()">
+        <div class="grid">
+          <div class="full">
+            <label for="nomeTela">Nome da Tela:</label>
+            <input type="text" id="nomeTela" name="nomeTela" aria-describedby="nomeHelp">
+            <div id="nomeHelp" class="info">Informe um nome curto e descritivo da tela.</div>
+          </div>
+
+          <div>
+            <label for="leitorResultado">🔊 Leitor de Tela:</label>
+            <div class="info">Verifique se todos os elementos da interface são lidos corretamente e em ordem lógica por um leitor de tela.</div>
+            <select id="leitorResultado" name="leitorResultado">
+              <option value="Positivo">Positivo</option>
+              <option value="Negativo">Negativo</option>
+            </select>
+            <label for="leitorObs" class="full">Observações</label>
+            <textarea id="leitorObs" name="leitorObs" placeholder="Observações sobre o teste de leitor de tela"></textarea>
+          </div>
+
+          <div>
+            <label for="contrasteResultado">🎨 Contraste:</label>
+            <div class="info">Verifique se o contraste entre texto e fundo atende aos padrões WCAG AA ou AAA.</div>
+            <select id="contrasteResultado" name="contrasteResultado">
+              <option value="Positivo">Positivo</option>
+              <option value="Negativo">Negativo</option>
+            </select>
+            <label for="contrasteObs" class="full">Observações</label>
+            <textarea id="contrasteObs" name="contrasteObs" placeholder="Observações sobre o teste de contraste"></textarea>
+          </div>
+
+          <div>
+            <label for="ampliacaoResultado">🔍 Ampliação:</label>
+            <div class="info">Verifique se a interface permanece funcional e legível com zoom de até 200%.</div>
+            <select id="ampliacaoResultado" name="ampliacaoResultado">
+              <option value="Positivo">Positivo</option>
+              <option value="Negativo">Negativo</option>
+            </select>
+            <label for="ampliacaoObs" class="full">Observações</label>
+            <textarea id="ampliacaoObs" name="ampliacaoObs" placeholder="Observações sobre o teste de ampliação"></textarea>
+          </div>
+
+          <div>
+            <label for="tecladoResultado">⌨️ Navegação por Teclado:</label>
+            <div class="info">Verifique se é possível navegar por todos os elementos da interface usando apenas o teclado.</div>
+            <select id="tecladoResultado" name="tecladoResultado">
+              <option value="Positivo">Positivo</option>
+              <option value="Negativo">Negativo</option>
+            </select>
+            <label for="tecladoObs" class="full">Observações</label>
+            <textarea id="tecladoObs" name="tecladoObs" placeholder="Observações sobre o teste de navegação por teclado"></textarea>
+          </div>
+
+          <div>
+            <label for="coresResultado">🌈 Uso de Cores:</label>
+            <div class="info">Verifique se as informações não dependem exclusivamente de cores para serem compreendidas.</div>
+            <select id="coresResultado" name="coresResultado">
+              <option value="Positivo">Positivo</option>
+              <option value="Negativo">Negativo</option>
+            </select>
+            <label for="coresObs" class="full">Observações</label>
+            <textarea id="coresObs" name="coresObs" placeholder="Observações sobre o teste de uso de cores"></textarea>
+          </div>
+
+          <div>
+            <label for="responsivoResultado">📱 Responsividade:</label>
+            <div class="info">Verifique se a interface se adapta corretamente a diferentes tamanhos de tela e dispositivos.</div>
+            <select id="responsivoResultado" name="responsivoResultado">
+              <option value="Positivo">Positivo</option>
+              <option value="Negativo">Negativo</option>
+            </select>
+            <label for="responsivoObs" class="full">Observações</label>
+            <textarea id="responsivoObs" name="responsivoObs" placeholder="Observações sobre o teste de responsividade"></textarea>
+          </div>
+        </div>
+
+        <div class="actions">
+          <button type="button" onclick="adicionarTela()">Adicionar Tela ao Relatório</button>
+          <button type="button" class="secondary" onclick="gerarPDF()">Gerar Relatório em PDF</button>
+          <button type="reset" class="secondary">Limpar</button>
+        </div>
+      </form>
+
+      <div id="feedbackMessage" class="feedback" role="status" aria-live="polite"></div>
+
+      <section class="telas-lista" id="telasLista" aria-label="Telas testadas">
+        <h2>📊 Telas Testadas</h2>
+        <div id="telasContainer">
+          <!-- Telas serão inseridas aqui dinamicamente -->
+        </div>
+      </section>
+    </main>
+
+    <footer>
+      <p>Arquivo de teste de acessibilidade — mantenha os campos claros e objetivos. <strong>Ative o leitor de tela</strong> e teste com zoom para validação.</p>
+      <p>Pressione <kbd>?</kbd> para ver os atalhos de teclado disponíveis.</p>
+    </footer>
+  </div>
+
+  <div id="atalhos" class="atalhos" role="dialog" aria-label="Atalhos de teclado">
+    <h3>Atalhos de Teclado</h3>
+    <ul>
+      <li><kbd>?</kbd> - Mostrar/ocultar atalhos</li>
+      <li><kbd>Alt</kbd> + <kbd>A</kbd> - Adicionar tela</li>
+      <li><kbd>Alt</kbd> + <kbd>P</kbd> - Gerar PDF</li>
+      <li><kbd>Alt</kbd> + <kbd>C</kbd> - Exportar CSV</li>
+      <li><kbd>Alt</kbd> + <kbd>T</kbd> - Alternar tema</li>
+      <li><kbd>Alt</kbd> + <kbd>L</kbd> - Limpar formulário</li>
+    </ul>
+  </div>
+
+  <!-- Modal de confirmação acessível -->
+  <div id="confirmOverlay" class="confirm-overlay" hidden>
+    <div id="confirmModal" class="confirm-modal" role="dialog" aria-modal="true" aria-labelledby="confirmTitle">
+      <h3 id="confirmTitle">Confirmação</h3>
+      <p id="confirmMessage">Tem certeza?</p>
+      <div style="display:flex;gap:8px;margin-top:12px;justify-content:flex-end;">
+        <button id="confirmCancel" class="secondary" type="button">Cancelar</button>
+        <button id="confirmOk" type="button">Confirmar</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Estado da aplicação
+    let telas = [];
+    let validacaoAtiva = false;
+    let lastAxeResults = null; // guarda último resultado do axe
+
+    // Inicialização
+    document.addEventListener('DOMContentLoaded', () => {
+  // Carregar tema
+  initTheme();
+  // Carregar dados salvos
+  loadFromStorage();
+  // Iniciar validação automática
+  initAxe();
+  // Configurar atalhos
+  setupShortcuts();
+    });
+
+    // Gerenciamento de tema
+    function initTheme() {
+      const theme = localStorage.getItem('theme') || 'auto';
+      document.documentElement.dataset.theme = theme;
+      updateThemeIcon();
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.dataset.theme;
+      const newTheme = current === 'dark' ? 'light' : 'dark';
+      document.documentElement.dataset.theme = newTheme;
+      localStorage.setItem('theme', newTheme);
+      updateThemeIcon();
+    }
+
+    function updateThemeIcon() {
+      const isDark = document.documentElement.dataset.theme === 'dark' || 
+        (document.documentElement.dataset.theme !== 'light' && 
+         window.matchMedia('(prefers-color-scheme: dark)').matches);
+      document.getElementById('themeIcon').textContent = isDark ? '🌚' : '🌞';
+    }
+
+    // Armazenamento local
+    function saveToStorage() {
+      try {
+        localStorage.setItem('telasTestadas', JSON.stringify(telas));
+      } catch (error) {
+        console.error('Erro ao salvar no localStorage:', error);
+        mostrarFeedback('Erro ao salvar os dados localmente', 'erro');
+      }
+    }
+
+    function loadFromStorage() {
+      try {
+        const saved = localStorage.getItem('telasTestadas');
+        if (saved) {
+          telas = JSON.parse(saved);
+          renderTelas();
+        }
+      } catch (error) {
+        console.error('Erro ao carregar do localStorage:', error);
+        mostrarFeedback('Erro ao carregar dados salvos', 'erro');
+      }
+    }
+
+    // Validação automática com axe-core (executa e guarda resultado)
+    async function initAxe() {
+      if (typeof axe === 'undefined') return;
+      
+      validacaoAtiva = true;
+      try {
+        const results = await axe.run();
+        lastAxeResults = results;
+        const violations = results.violations || [];
+        if (violations.length > 0) {
+          // Mensagem resumida com instrução para ver detalhes no console
+          mostrarFeedback(`Encontrados ${violations.length} problemas de acessibilidade (ver console para detalhes)`, 'erro');
+          console.group('Axe results');
+          console.log(results);
+          console.groupEnd();
+        } else {
+          mostrarFeedback('Validação automática: nenhum problema encontrado', 'sucesso');
+        }
+      } catch (err) {
+        console.error('Erro na validação:', err);
+      }
+    }
+
+    // Atalhos de teclado
+    function setupShortcuts() {
+      document.addEventListener('keydown', (e) => {
+        if (e.key === '?') {
+          document.getElementById('atalhos').classList.toggle('visible');
+        }
+        if (e.altKey) {
+          switch(e.key.toLowerCase()) {
+            case 'a': adicionarTela(); break;
+            case 'p': gerarPDF(); break;
+            case 'c': exportarCSV(); break;
+            case 't': toggleTheme(); break;
+            case 'l': document.getElementById('formTela').reset(); break;
+          }
+        }
+      });
+    }
+
+    // Renderização da lista de telas
+    function renderTelas() {
+      const container = document.getElementById('telasContainer');
+      container.innerHTML = telas.length === 0 
+        ? '<p>Nenhuma tela testada ainda.</p>'
+        : telas.map((tela, idx) => `
+          <article class="tela-item">
+            <div class="tela-header">
+              <h3 class="tela-titulo">${idx + 1}. ${tela.nomeTela}</h3>
+              <div class="tela-acoes">
+                <button type="button" onclick="editarTela(${idx})" aria-label="Editar ${tela.nomeTela}" class="secondary">✏️ Editar</button>
+                <button type="button" onclick="confirmRemover(${idx})" aria-label="Remover ${tela.nomeTela}" class="secondary">🗑️ Remover</button>
+              </div>
+            </div>
+            <div class="tela-conteudo">
+              <div class="tela-campo">
+                <h4>🔊 Leitor de Tela</h4>
+                <p>${tela.leitor}</p>
+              </div>
+              <div class="tela-campo">
+                <h4>🎨 Contraste</h4>
+                <p>${tela.contraste}</p>
+              </div>
+              <div class="tela-campo">
+                <h4>🔍 Ampliação</h4>
+                <p>${tela.ampliacao}</p>
+              </div>
+              <div class="tela-campo">
+                <h4>⌨️ Navegação por Teclado</h4>
+                <p>${tela.teclado}</p>
+              </div>
+              <div class="tela-campo">
+                <h4>🌈 Uso de Cores</h4>
+                <p>${tela.cores}</p>
+              </div>
+              <div class="tela-campo">
+                <h4>📱 Responsividade</h4>
+                <p>${tela.responsivo}</p>
+              </div>
+            </div>
+          </article>
+        `).join('');
+    }
+
+    // Feedback visual
+    function mostrarFeedback(mensagem, tipo = 'sucesso') {
+      const feedbackEl = document.getElementById('feedbackMessage');
+      feedbackEl.textContent = mensagem;
+      // Garantir classes seguras
+      feedbackEl.className = '';
+      feedbackEl.classList.add(tipo);
+      feedbackEl.style.display = 'block';
+
+      setTimeout(() => {
+        feedbackEl.style.display = 'none';
+      }, 3000);
+    }
+
+    function adicionarTela() {
+      const nomeTela = document.getElementById('nomeTela').value.trim();
+      if (!nomeTela) {
+        mostrarFeedback('Por favor, informe o nome da tela.', 'erro');
+        document.getElementById('nomeTela').focus();
+        return;
+      }
+
+      const leitor = document.getElementById('leitorResultado').value + ' - ' + document.getElementById('leitorObs').value.trim();
+      const contraste = document.getElementById('contrasteResultado').value + ' - ' + document.getElementById('contrasteObs').value.trim();
+      const ampliacao = document.getElementById('ampliacaoResultado').value + ' - ' + document.getElementById('ampliacaoObs').value.trim();
+      const teclado = document.getElementById('tecladoResultado').value + ' - ' + document.getElementById('tecladoObs').value.trim();
+      const cores = document.getElementById('coresResultado').value + ' - ' + document.getElementById('coresObs').value.trim();
+      const responsivo = document.getElementById('responsivoResultado').value + ' - ' + document.getElementById('responsivoObs').value.trim();
+
+      const tela = { nomeTela, leitor, contraste, ampliacao, teclado, cores, responsivo };
+      telas.push(tela);
+      
+      // Atualizar a interface
+      renderTelas();
+      // Salvar no localStorage
+      saveToStorage();
+
+      mostrarFeedback('Tela adicionada ao relatório. Total: ' + telas.length, 'sucesso');
+      document.getElementById('formTela').reset();
+      document.getElementById('nomeTela').focus();
+    }
+
+    function gerarPDF() {
+      if (telas.length === 0) {
+        mostrarFeedback('Nenhuma tela no relatório. Adicione pelo menos uma tela.', 'erro');
+        return;
+      }
+
+      try {
+        const { jsPDF } = window.jspdf;
+        const doc = new jsPDF({ unit: 'pt', format: 'a4' });
+        const margin = 40;
+        let y = 40;
+
+        doc.setFontSize(14);
+        doc.text('Relatório de Teste de Acessibilidade', margin, y);
+        y += 20;
+
+        doc.setFontSize(10);
+        telas.forEach((t, idx) => {
+          y += 14;
+          doc.text((idx + 1) + '. ' + t.nomeTela, margin, y);
+          y += 14;
+          doc.text('  - Leitor: ' + t.leitor, margin, y);
+          y += 12;
+          doc.text('  - Contraste: ' + t.contraste, margin, y);
+          y += 12;
+          doc.text('  - Ampliação: ' + t.ampliacao, margin, y);
+          y += 12;
+          doc.text('  - Teclado: ' + t.teclado, margin, y);
+          y += 12;
+          doc.text('  - Cores: ' + t.cores, margin, y);
+          y += 12;
+          doc.text('  - Responsividade: ' + t.responsivo, margin, y);
+
+          if (y > 720) {
+            doc.addPage();
+            y = 40;
+          }
+        });
+
+        doc.save('relatorio_acessibilidade.pdf');
+        mostrarFeedback('PDF gerado com sucesso.', 'sucesso');
+      } catch (err) {
+        console.error(err);
+        mostrarFeedback('Erro ao gerar PDF: ' + (err.message || err), 'erro');
+      }
+    }
+
+    // Ajuda de acessibilidade: focus no conteúdo quando pular link for usado
+    document.querySelector('.skip-link').addEventListener('click', function (e) {
+      const main = document.getElementById('mainContent');
+      if (main) {
+        main.setAttribute('tabindex', '-1');
+        main.focus();
+        main.removeAttribute('tabindex');
+      }
+    });
+
+    // Exportação CSV
+    function exportarCSV() {
+      if (telas.length === 0) {
+        mostrarFeedback('Nenhuma tela para exportar. Adicione pelo menos uma tela.', 'erro');
+        return;
+      }
+
+      const headers = ['Tela', 'Leitor', 'Contraste', 'Ampliação', 'Teclado', 'Cores', 'Responsivo'];
+      const rows = telas.map(tela => [
+        tela.nomeTela,
+        tela.leitor,
+        tela.contraste,
+        tela.ampliacao,
+        tela.teclado,
+        tela.cores,
+        tela.responsivo
+      ]);
+
+      const csvContent = [
+        headers.join(','),
+        ...rows.map(row => row.map(cell => `"${cell.replace(/"/g, '""')}"`).join(','))
+      ].join('\n');
+
+      const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'relatorio_acessibilidade.csv';
+      link.click();
+
+      mostrarFeedback('CSV exportado com sucesso!');
+    }
+
+    // Edição de telas
+    function editarTela(index) {
+      const tela = telas[index];
+      
+      // Preencher campos
+      document.getElementById('nomeTela').value = tela.nomeTela;
+      
+      const [leitorRes, ...leitorObs] = tela.leitor.split(' - ');
+      document.getElementById('leitorResultado').value = leitorRes;
+      document.getElementById('leitorObs').value = leitorObs.join(' - ');
+      
+      const [contrasteRes, ...contrasteObs] = tela.contraste.split(' - ');
+      document.getElementById('contrasteResultado').value = contrasteRes;
+      document.getElementById('contrasteObs').value = contrasteObs.join(' - ');
+      
+      const [ampRes, ...ampObs] = tela.ampliacao.split(' - ');
+      document.getElementById('ampliacaoResultado').value = ampRes;
+      document.getElementById('ampliacaoObs').value = ampObs.join(' - ');
+      
+      const [tecladoRes, ...tecladoObs] = tela.teclado.split(' - ');
+      document.getElementById('tecladoResultado').value = tecladoRes;
+      document.getElementById('tecladoObs').value = tecladoObs.join(' - ');
+      
+      const [coresRes, ...coresObs] = tela.cores.split(' - ');
+      document.getElementById('coresResultado').value = coresRes;
+      document.getElementById('coresObs').value = coresObs.join(' - ');
+      
+      const [respRes, ...respObs] = tela.responsivo.split(' - ');
+      document.getElementById('responsivoResultado').value = respRes;
+      document.getElementById('responsivoObs').value = respObs.join(' - ');
+
+      // Remover a tela antiga
+      telas.splice(index, 1);
+      // Atualizar UI
+      renderTelas();
+      saveToStorage();
+      // Focar no campo de nome
+      document.getElementById('nomeTela').focus();
+      mostrarFeedback('Editando tela...', 'info');
+    }
+
+    // Remoção de telas via modal acessível
+    let pendingRemoveIndex = null;
+    let lastFocusBeforeModal = null;
+    function confirmRemover(index) {
+      pendingRemoveIndex = index;
+      const overlay = document.getElementById('confirmOverlay');
+      const message = document.getElementById('confirmMessage');
+      // salvar foco atual para restaurar depois
+      lastFocusBeforeModal = document.activeElement;
+      message.textContent = `Remover \"${telas[index].nomeTela}\"? Esta ação não pode ser desfeita.`;
+      overlay.hidden = false;
+      // mover foco para o botão confirmar
+      const ok = document.getElementById('confirmOk');
+      ok.focus();
+    }
+
+    document.getElementById('confirmCancel')?.addEventListener('click', () => {
+      document.getElementById('confirmOverlay').hidden = true;
+      pendingRemoveIndex = null;
+      try { lastFocusBeforeModal?.focus(); } catch(e){}
+    });
+
+    document.getElementById('confirmOk')?.addEventListener('click', () => {
+      if (pendingRemoveIndex !== null) {
+        telas.splice(pendingRemoveIndex, 1);
+        saveToStorage();
+        renderTelas();
+        mostrarFeedback('Tela removida com sucesso', 'sucesso');
+      }
+      document.getElementById('confirmOverlay').hidden = true;
+      pendingRemoveIndex = null;
+      try { lastFocusBeforeModal?.focus(); } catch(e){}
+    });
+    // Fechar modal com Escape e clique fora
+    document.addEventListener('keydown', (e) => {
+      if (e.key === 'Escape') {
+        const overlay = document.getElementById('confirmOverlay');
+        if (overlay && !overlay.hidden) {
+          overlay.hidden = true;
+          pendingRemoveIndex = null;
+        }
+      }
+    });
+
+    document.getElementById('confirmOverlay')?.addEventListener('click', (e) => {
+      const modal = document.getElementById('confirmModal');
+      if (e.target === document.getElementById('confirmOverlay')) {
+        // clique fora do modal
+        document.getElementById('confirmOverlay').hidden = true;
+        pendingRemoveIndex = null;
+      }
+    });
+  </script>
+</body>
+</html>

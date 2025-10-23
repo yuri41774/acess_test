@@ -1,0 +1,5 @@
+[
+  { "sha": "c1", "message": "Fix typo in UI" },
+  { "sha": "c2", "message": "Improve accessibility for forms" },
+  { "sha": "c3", "message": "Merge pull request #12 from feature/a11y" }
+]
