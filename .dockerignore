@@ -1,6 +1,0 @@
-# Ignorar arquivos desnecessários
-node_modules
-.git
-.gitignore
-/tmp
-*.log
