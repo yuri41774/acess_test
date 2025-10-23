@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Remote Check - A11yTool</title>
+  <style>body{font-family:system-ui,Arial;padding:20px;background:#f5f7fb} .card{background:#fff;padding:16px;border-radius:8px;max-width:900px} input{width:100%;padding:8px;margin:8px 0} textarea{width:100%;min-height:200px}</style>
+</head>
+<body>
+  <div class="card">
+    <h1>Remote Check Server</h1>
+    <p>Insira a URL da página que você deseja auditar. O servidor local (tools/a11y/remote-check-server.js) executará Puppeteer e axe na URL e retornará um JSON com resultados.</p>
+    <label for="url">URL da página</label>
+    <input id="url" placeholder="http://localhost:8080/index.html" />
+    <label for="selectors">Seletores (opcional, separados por vírgula)</label>
+    <input id="selectors" placeholder="#mainContent,.header" />
+    <div style="margin-top:8px">
+      <button id="run">Executar checagem remota</button>
+    </div>
+    <h3>Resultado:</h3>
+    <textarea id="out">Nenhum resultado ainda.</textarea>
+  </div>
+  <script>
+    document.getElementById('run').addEventListener('click', async function(){
+      const url = document.getElementById('url').value.trim();
+      const selectors = document.getElementById('selectors').value.split(',').map(s=>s.trim()).filter(Boolean);
+      if(!url){ alert('Informe a URL'); return; }
+      try{
+        const res = await fetch('http://localhost:3001/api/check', {
+          method:'POST', headers:{'content-type':'application/json'}, body: JSON.stringify({ url, selectors })
+        });
+        const data = await res.json();
+        document.getElementById('out').value = JSON.stringify(data, null, 2);
+      }catch(e){ document.getElementById('out').value = 'Erro: '+String(e); }
+    });
+  </script>
+</body>
+</html>

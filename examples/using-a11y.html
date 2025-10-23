@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Exemplo: Usando A11yTool em outra guia</title>
+  <style>
+    body { font-family: system-ui, Arial; padding: 20px; background:#f6f8fb; color:#111; }
+    .card { background: #fff; padding: 16px; border-radius:8px; box-shadow: 0 2px 8px rgba(16,24,40,0.06); max-width:900px; }
+    pre { background:#0b1220; color:#d6eaff; padding:12px; border-radius:6px; overflow:auto; }
+    button { margin-right:8px; }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <h1>Exemplo de integração: A11yTool</h1>
+    <p>Esta página demonstra como carregar e usar <code>tools/a11y/a11y-tool.js</code> a partir de outra guia/página.</p>
+
+    <div style="margin:12px 0">
+      <button id="btnRun" type="button">Executar checagens</button>
+      <button id="btnExport" type="button">Exportar JSON</button>
+    </div>
+
+    <h3>Resultado (JSON):</h3>
+    <pre id="out">Nenhum resultado ainda.</pre>
+
+    <h3>Como usar</h3>
+    <pre>// após carregar a biblioteca (script tag)
+if (window.A11yTool) {
+  // checagem completa (axe + contraste)
+  const res = await window.A11yTool.runFullChecks();
+  console.log(res);
+  // exportar relatório
+  window.A11yTool.exportReport(res, 'meu-relatorio-a11y.json');
+}
+</pre>
+
+    <p>Observações: para que o <code>axe-core</code> funcione no browser, você precisa ter a biblioteca carregada (CDN ou bundle). O A11yTool chama <code>axe.run()</code> quando <code>axe</code> está disponível.</p>
+  </div>
+
+  <!-- carregar a biblioteca reutilizável. Ajuste o caminho conforme necessário em seu projeto -->
+  <script src="/tools/a11y/a11y-tool.js" defer></script>
+  <script>
+    document.getElementById('btnRun').addEventListener('click', async function () {
+      const out = document.getElementById('out');
+      out.textContent = 'Executando...';
+      try {
+        if (!window.A11yTool) throw new Error('A11yTool não encontrada. Verifique o caminho do script.');
+        const results = await window.A11yTool.runFullChecks(document);
+        out.textContent = JSON.stringify(results, null, 2);
+      } catch (e) {
+        out.textContent = 'Erro: ' + (e && e.message ? e.message : String(e));
+      }
+    });
+
+    document.getElementById('btnExport').addEventListener('click', function () {
+      try {
+        if (!window.A11yTool) throw new Error('A11yTool não encontrada.');
+        const payload = { timestamp: new Date().toISOString(), url: location.href };
+        // anexar resultado atual quando existir
+        try { payload.last = JSON.parse(document.getElementById('out').textContent); } catch(e) {}
+        window.A11yTool.exportReport(payload, 'a11y-example-report.json');
+      } catch (e) {
+        alert('Erro: ' + (e && e.message ? e.message : String(e)));
+      }
+    });
+  </script>
+</body>
+</html>

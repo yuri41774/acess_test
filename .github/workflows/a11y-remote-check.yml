@@ -1,0 +1,59 @@
+name: a11y-remote-check
+
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  run-remote-checks:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies (tools/a11y)
+        working-directory: tools/a11y
+        run: npm ci
+
+      - name: Serve site (python)
+        run: |
+          python3 -m http.server 8080 &
+          echo $! > /tmp/httpserver.pid
+          sleep 1
+
+      - name: Run pixel-check (local)
+        working-directory: tools/a11y
+        run: |
+          node pixel-check.js --url http://127.0.0.1:8080/index.html --selector "#mainContent" --out ../a11y-pixel.json
+
+      - name: Start remote-check server
+        working-directory: tools/a11y
+        env:
+          SAVE_SCREENSHOTS: '1'
+        run: |
+          node remote-check-server.js &
+          echo $! > /tmp/remotecheck.pid
+          sleep 1
+
+      - name: Call remote-check server
+        run: |
+          curl -s -X POST -H "Content-Type: application/json" -d '{"url":"http://127.0.0.1:8080/index.html","selectors":["#mainContent"]}' http://127.0.0.1:3001/api/check > tools/a11y/remote-check-result.json || true
+
+      - name: Upload a11y artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-reports
+          path: |
+            tools/a11y/remote-check-result.json
+            tools/a11y/a11y-pixel.json
+            tools/a11y/artifacts/**
+
+      - name: Teardown
+        run: |
+          kill $(cat /tmp/httpserver.pid) || true
+          kill $(cat /tmp/remotecheck.pid) || true

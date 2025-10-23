@@ -1,0 +1,18 @@
+{
+  "name": "a11y-tool",
+  "version": "0.1.0",
+  "description": "Ferramenta cliente para checagens de acessibilidade (axe + contraste).",
+  "main": "a11y-tool.js",
+  "module": "a11y-tool.esm.js",
+  "scripts": {
+    "pixel-check": "node pixel-check.js --help"
+  },
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "puppeteer": "^21.3.3",
+    "express": "^4.18.2",
+    "minimist": "^1.2.8",
+    "pngjs": "^6.0.0"
+  }
+}

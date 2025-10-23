@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <title>Teste de Acessibilidade Interativo</title>
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <!-- Content Security Policy: allows our static assets and CDN for axe/jspdf; tightens defaults for production -->
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' https://cdnjs.cloudflare.com; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self'; frame-ancestors 'none'; base-uri 'self';">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/axe-core/4.7.0/axe.min.js"></script>
   <!--
@@ -271,12 +273,16 @@
       box-shadow: 0 6px 18px rgba(0,0,0,0.2);
       border: 1px solid var(--border);
     }
+    /* Tool selector */
+    .tool-selector { background: var(--surface); border: 1px solid var(--border); padding: 16px; border-radius:8px; margin: 12px 0; }
+    .tool-selector h2 { margin-top: 0; }
   </style>
 </head>
 <body>
   <button class="theme-toggle" aria-label="Alternar tema claro/escuro" onclick="toggleTheme()">
     <span id="themeIcon">🌞</span>
   </button>
+  <button style="position:fixed;top:16px;left:16px;padding:8px;border-radius:8px;z-index:150;" onclick="openToolSelector()">Escolher ferramenta</button>
 
   <a class="skip-link" href="#mainContent">Pular para o conteúdo</a>
   <div class="container">
@@ -288,6 +294,18 @@
         <span>Validação automática em execução</span>
       </div>
     </header>
+
+    <!-- Seletor inicial de ferramenta -->
+    <section id="toolSelector" class="tool-selector" aria-label="Escolha da ferramenta">
+      <h2>Escolha a ferramenta</h2>
+      <p class="info">Selecione como você quer executar as checagens de acessibilidade.</p>
+      <div style="display:flex;gap:10px;flex-wrap:wrap;margin-top:8px;">
+        <button type="button" onclick="chooseTool('in-app')">Ferramentas locais (no navegador)</button>
+        <button type="button" onclick="chooseTool('remote')">Analisador remoto (Puppeteer + axe)</button>
+        <button type="button" onclick="chooseTool('example')" class="secondary">Abrir exemplo de integração</button>
+      </div>
+      <p class="info" style="margin-top:12px;font-size:0.9rem">Você pode mudar a escolha depois usando o botão "Escolher ferramenta" no topo.</p>
+    </section>
 
     <main id="mainContent">
       <h2>📋 Informações da Tela</h2>
@@ -391,6 +409,21 @@
           <p class="info">Nenhuma checagem executada ainda.</p>
         </div>
       </section>
+
+      <section id="remoteChecker" aria-label="Analisador remoto" style="margin-top:18px;">
+        <h2>🌐 Analisador Remoto (opcional)</h2>
+        <div class="info">Insira a URL de uma página (pode ser local, ex.: <code>http://127.0.0.1:8080/index.html</code>) e seletores opcionais para capturar screenshots. Requer o <code>remote-check-server</code> rodando em <code>http://localhost:3001</code>.</div>
+        <label for="remoteUrl">URL da página</label>
+        <input id="remoteUrl" type="text" placeholder="http://127.0.0.1:8080/index.html" />
+        <label for="remoteSelectors">Seletores (opcional, separados por vírgula)</label>
+        <input id="remoteSelectors" type="text" placeholder="#mainContent,.header" />
+        <div class="actions" style="margin-top:8px;">
+          <button type="button" onclick="runRemoteCheckFromIndex()">Executar checagem remota</button>
+          <button type="button" class="secondary" onclick="window.open('/examples/remote-check.html','_blank')">Abrir interface remota</button>
+        </div>
+        <h3>Resultado remoto</h3>
+        <pre id="remoteOut" style="background:#0f1724;color:#e6eef8;padding:12px;border-radius:6px;max-height:320px;overflow:auto;">Nenhum resultado ainda.</pre>
+      </section>
     </main>
 
     <footer>
@@ -439,7 +472,54 @@
   initAxe();
   // Configurar atalhos
   setupShortcuts();
+  // ocultar ferramentas de desenvolvimento em produção
+  hideDevToolsIfProd();
     });
+
+  // load reusable a11y tool (if available locally)
+  (function(){
+    const s = document.createElement('script');
+    s.src = 'tools/a11y/a11y-tool.js';
+    s.defer = true;
+    document.head.appendChild(s);
+  })();
+
+    // Hide dev-only UI (remote checker) unless running on localhost or ?dev=1
+    function hideDevToolsIfProd() {
+      try {
+        const isLocalhost = ['127.0.0.1', 'localhost'].includes(location.hostname);
+        const urlParams = new URLSearchParams(location.search);
+        const allowDev = isLocalhost || urlParams.get('dev') === '1';
+        if (!allowDev) {
+          const el = document.getElementById('remoteChecker');
+          if (el) el.style.display = 'none';
+        }
+      } catch (e) { /* noop */ }
+    }
+
+    // Tool selection UI handlers
+    let selectedTool = null;
+    function chooseTool(tool) {
+      selectedTool = tool;
+      // hide selector and show main area
+      const sel = document.getElementById('toolSelector'); if (sel) sel.style.display = 'none';
+      document.getElementById('mainContent').scrollIntoView({ behavior: 'smooth' });
+      // show/hide remoteChecker depending on selection
+      const remote = document.getElementById('remoteChecker');
+      if (remote) remote.style.display = (tool === 'remote') ? 'block' : 'none';
+      // if example chosen, open example page
+      if (tool === 'example') {
+        window.open('/examples/using-a11y.html','_blank');
+      }
+      mostrarFeedback('Ferramenta selecionada: ' + tool, 'info');
+    }
+
+    function openToolSelector() {
+      const sel = document.getElementById('toolSelector'); if (sel) sel.style.display = 'block';
+      // hide remoteChecker while choosing again
+      const remote = document.getElementById('remoteChecker'); if (remote) remote.style.display = 'none';
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
 
     // Gerenciamento de tema
     function initTheme() {
@@ -840,8 +920,31 @@
     async function runFullA11yChecks() {
       const a11yContainer = document.getElementById('a11yContainer');
       a11yContainer.innerHTML = '';
-
-      // axe-core run
+      // Prefer reusable A11yTool when loaded
+      if (window.A11yTool) {
+        try {
+          const results = await window.A11yTool.runFullChecks();
+          lastAxeResults = results.axe || lastAxeResults;
+          if (results.axe && results.axe.violations) {
+            const summary = document.createElement('div'); summary.className = 'info'; summary.textContent = `axe-core: ${results.axe.violations.length} violações encontradas`;
+            a11yContainer.appendChild(summary);
+            renderAxeDetails(results.axe, a11yContainer);
+          }
+          const crHeading = document.createElement('h4'); crHeading.textContent = 'Contraste (checagem automática)'; a11yContainer.appendChild(crHeading);
+          const contrastResults = results.contrast || [];
+          if (contrastResults.length === 0) { const p = document.createElement('p'); p.className = 'info'; p.textContent = 'Nenhum texto detectado para avaliação de contraste.'; a11yContainer.appendChild(p); }
+          else {
+            const failing = contrastResults.filter(r => !r.passes);
+            const summary2 = document.createElement('p'); summary2.textContent = `Analisados ${contrastResults.length} elementos. ${failing.length} com contraste insuficiente.`; a11yContainer.appendChild(summary2);
+            if (failing.length > 0) { const ul2 = document.createElement('ul'); failing.slice(0,20).forEach(r=>{ const li=document.createElement('li'); li.textContent = `${r.selector} — ratio: ${r.ratio.toFixed(2)} — exigido: ${r.required}`; ul2.appendChild(li); }); a11yContainer.appendChild(ul2); }
+            const complex = contrastResults.filter(r => r.complexBackground);
+            if (complex.length>0) { const warn = document.createElement('p'); warn.className='info'; warn.textContent = `${complex.length} elementos possuem background-image/gradiente. Recomenda-se verificação manual.`; a11yContainer.appendChild(warn); }
+          }
+        } catch (e) { const p = document.createElement('p'); p.className='erro'; p.textContent = 'Erro ao executar A11yTool: ' + (e.message||e); a11yContainer.appendChild(p); }
+        return;
+      }
+      // fallback to inline behaviour if A11yTool not present
+      // previous inline implementation continues here
       if (typeof axe !== 'undefined') {
         try {
           const results = await axe.run();
@@ -851,8 +954,6 @@
           summary.className = 'info';
           summary.textContent = `axe-core: ${results.violations.length} violações encontradas, ${results.passes.length} passes, ${results.incomplete.length} incompletos.`;
           a11yContainer.appendChild(summary);
-
-          // render violations in-page
           renderAxeDetails(results, a11yContainer);
         } catch (err) {
           const p = document.createElement('p'); p.className = 'erro'; p.textContent = 'Erro ao executar axe: ' + (err.message || err);
@@ -862,8 +963,6 @@
         const p = document.createElement('p'); p.className = 'info'; p.textContent = 'axe-core não encontrado (CDN não carregado).';
         a11yContainer.appendChild(p);
       }
-
-      // Contrast checks (robust) across visible text elements
       try {
         const contrastResults = findTextElementsAndCheckContrast();
         const crHeading = document.createElement('h4');
@@ -877,7 +976,6 @@
           const summary2 = document.createElement('p');
           summary2.textContent = `Analisados ${contrastResults.length} elementos. ${failing.length} com contraste insuficiente.`;
           a11yContainer.appendChild(summary2);
-
           if (failing.length > 0) {
             const ul2 = document.createElement('ul');
             failing.slice(0, 20).forEach(r => {
@@ -978,6 +1076,22 @@
     }
 
     function exportLastAxeResults() {
+      // Prefer A11yTool export if available
+      if (window.A11yTool && typeof window.A11yTool.exportReport === 'function') {
+        try {
+          const payload = {
+            timestamp: new Date().toISOString(),
+            telas,
+            axe: lastAxeResults || (() => { try { return JSON.parse(localStorage.getItem('lastAxeResults')||'null'); } catch(e){return null;} })(),
+            contrast: (() => { try { return findTextElementsAndCheckContrast(); } catch(e){return null;} })()
+          };
+          window.A11yTool.exportReport(payload, 'a11y-report.json');
+          mostrarFeedback('Relatório de acessibilidade exportado (via A11yTool)', 'sucesso');
+          return;
+        } catch (e) {
+          console.warn('A11yTool export failed, falling back', e);
+        }
+      }
       const combined = {
         timestamp: new Date().toISOString(),
         telas,
@@ -1042,7 +1156,44 @@
         const resultArea = document.createElement('div');
         resultArea.style.marginTop = '8px';
         resultArea.className = 'a11y-tela-results';
-        // run axe on the subtree if axe is available
+
+        // Prefer A11yTool if available
+        if (window.A11yTool) {
+          try {
+            const results = await window.A11yTool.revalidateElement(articleEl);
+            if (results.axe) {
+              const summary = document.createElement('p');
+              summary.textContent = `axe: ${results.axe.violations.length} violações encontradas.`;
+              resultArea.appendChild(summary);
+              if (results.axe.violations.length > 0) {
+                const ul = document.createElement('ul');
+                results.axe.violations.slice(0,10).forEach(v => { const li = document.createElement('li'); li.textContent = `${v.id}: ${v.help}`; ul.appendChild(li); });
+                resultArea.appendChild(ul);
+              }
+            } else {
+              const p = document.createElement('p'); p.className = 'info'; p.textContent = 'axe-core não disponível'; resultArea.appendChild(p);
+            }
+
+            if (results.contrast) {
+              const failing = results.contrast.filter(r => !r.passes);
+              const cr = document.createElement('p'); cr.textContent = `Contraste: ${results.contrast.length} elementos avaliados, ${failing.length} falharam.`; resultArea.appendChild(cr);
+              if (failing.length > 0) { const list = document.createElement('ul'); failing.slice(0,10).forEach(f => { const li = document.createElement('li'); li.textContent = `${f.selector} — ${f.ratio.toFixed(2)} (req ${f.required})`; list.appendChild(li); }); resultArea.appendChild(list); }
+              const complex = results.contrast.filter(r => r.complexBackground);
+              if (complex.length > 0) { const warn = document.createElement('p'); warn.className = 'info'; warn.textContent = `${complex.length} elementos possuem background-image/gradiente. Recomenda-se verificação manual ou captura de screenshot para análise de contraste real.`; resultArea.appendChild(warn); }
+            }
+
+            // attach result area to article
+            const prev = articleEl.querySelector('.a11y-tela-results'); if (prev) prev.remove();
+            articleEl.appendChild(resultArea);
+            return;
+          } catch (e) {
+            const p = document.createElement('p'); p.className = 'erro'; p.textContent = 'Erro A11yTool: ' + (e.message || e); resultArea.appendChild(p);
+            const prev = articleEl.querySelector('.a11y-tela-results'); if (prev) prev.remove(); articleEl.appendChild(resultArea);
+            return;
+          }
+        }
+
+        // fallback: run axe + contrast checks locally
         if (typeof axe !== 'undefined') {
           try {
             const results = await axe.run(articleEl);
@@ -1051,11 +1202,7 @@
             resultArea.appendChild(summary);
             if (results.violations.length > 0) {
               const ul = document.createElement('ul');
-              results.violations.slice(0,10).forEach(v => {
-                const li = document.createElement('li');
-                li.textContent = `${v.id}: ${v.help}`;
-                ul.appendChild(li);
-              });
+              results.violations.slice(0,10).forEach(v => { const li = document.createElement('li'); li.textContent = `${v.id}: ${v.help}`; ul.appendChild(li); });
               resultArea.appendChild(ul);
             }
           } catch (e) {
@@ -1063,8 +1210,7 @@
             resultArea.appendChild(p);
           }
         } else {
-          const p = document.createElement('p'); p.className = 'info'; p.textContent = 'axe-core não disponível';
-          resultArea.appendChild(p);
+          const p = document.createElement('p'); p.className = 'info'; p.textContent = 'axe-core não disponível'; resultArea.appendChild(p);
         }
 
         // run contrast checks within this article only
@@ -1079,6 +1225,11 @@
             let bgColor = null; let node = n;
             while (node && node !== articleEl && node !== document.documentElement) {
               const bg = window.getComputedStyle(node).backgroundColor;
+              const bgImage = window.getComputedStyle(node).backgroundImage;
+              if (bgImage && bgImage !== 'none') {
+                // mark complex backgrounds for manual review
+                // propagate flag later via elResults
+              }
               if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') { bgColor = bg; break; }
               node = node.parentElement;
             }
@@ -1089,7 +1240,15 @@
             const fontWeight = style.fontWeight || '400';
             const isLarge = fontSize >= 18 || (fontSize >= 14 && parseInt(fontWeight,10) >= 700);
             const required = isLarge ? 3.0 : 4.5;
-            elResults.push({ selector: elementSelector(n), ratio, required, passes: ratio >= required });
+            // detect complex background separately
+            let complexBackground = false;
+            let walker = n;
+            while (walker && walker !== articleEl && walker !== document.documentElement) {
+              const bgImage = window.getComputedStyle(walker).backgroundImage;
+              if (bgImage && bgImage !== 'none') { complexBackground = true; break; }
+              walker = walker.parentElement;
+            }
+            elResults.push({ selector: elementSelector(n), ratio, required, passes: ratio >= required, complexBackground });
           } catch (e) {}
         });
         const failing = elResults.filter(r => !r.passes);
@@ -1097,9 +1256,7 @@
         const cr = document.createElement('p'); cr.textContent = `Contraste: ${elResults.length} elementos avaliados, ${failing.length} falharam.`;
         resultArea.appendChild(cr);
         if (failing.length > 0) {
-          const list = document.createElement('ul');
-          failing.slice(0,10).forEach(f => { const li = document.createElement('li'); li.textContent = `${f.selector} — ${f.ratio.toFixed(2)} (req ${f.required})`; list.appendChild(li); });
-          resultArea.appendChild(list);
+          const list = document.createElement('ul'); failing.slice(0,10).forEach(f => { const li = document.createElement('li'); li.textContent = `${f.selector} — ${f.ratio.toFixed(2)} (req ${f.required})`; list.appendChild(li); }); resultArea.appendChild(list);
         }
         if (complex.length > 0) {
           const warn = document.createElement('p'); warn.className = 'info'; warn.textContent = `${complex.length} elementos possuem background-image/gradiente. Recomenda-se verificação manual ou captura de screenshot para análise de contraste real.`;
@@ -1107,11 +1264,37 @@
         }
 
         // attach result area to article
-        // remove previous results if present
         const prev = articleEl.querySelector('.a11y-tela-results'); if (prev) prev.remove();
         articleEl.appendChild(resultArea);
       } catch (err) {
         console.error('Revalidate error', err);
+      }
+    }
+
+    // Executa checagem remota via remote-check-server
+    async function runRemoteCheckFromIndex() {
+      const url = document.getElementById('remoteUrl').value.trim();
+      const selectors = document.getElementById('remoteSelectors').value.split(',').map(s => s.trim()).filter(Boolean);
+      const out = document.getElementById('remoteOut');
+      if (!url) { mostrarFeedback('Informe a URL para verificação remota', 'erro'); out.textContent = 'Informe a URL para verificação remota'; return; }
+      out.textContent = 'Executando checagem remota...';
+      try {
+        const resp = await fetch('http://127.0.0.1:3001/api/check', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ url, selectors })
+        });
+        if (!resp.ok) {
+          const txt = await resp.text();
+          out.textContent = `Erro remoto: ${resp.status} ${resp.statusText}\n${txt}`;
+          mostrarFeedback('Erro ao executar checagem remota', 'erro');
+          return;
+        }
+        const json = await resp.json();
+        out.textContent = JSON.stringify(json, null, 2);
+        mostrarFeedback('Checagem remota concluída', 'sucesso');
+      } catch (e) {
+        out.textContent = 'Erro ao contactar servidor remoto: ' + (e && e.message ? e.message : String(e));
+        mostrarFeedback('Erro ao contactar servidor remoto', 'erro');
       }
     }
   </script>
