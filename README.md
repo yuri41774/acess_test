@@ -64,3 +64,32 @@ Changelog automático
 
 O workflow também gera automaticamente um changelog simples entre a tag anterior (por data de criação) e a tag atual, usando `git log` e adiciona as mensagens de commit ao corpo do Release. Se não houver tag anterior, ele tentará incluir as mensagens desde o início do histórico.
 O workflow agora gera um changelog baseado em PRs: ele busca PRs associados aos commits entre a tag anterior e a atual e inclui título e autor de cada PR no corpo do Release. Se não encontrar PRs diretamente, faz fallback por PRs mesclados no intervalo de datas.
+
+### Pós-force-push (importante)
+
+Se este repositório teve o histórico reescrito (force-push), siga estes passos para sincronizar seu clone local e evitar conflitos:
+
+```bash
+git fetch origin
+git checkout main
+git reset --hard origin/main
+git clean -fdx
+```
+
+Aviso: isso descartará alterações locais não comitadas.
+
+### Hooks locais e proteção contra arquivos grandes
+
+Para evitar commitar arquivos grandes acidentalmente:
+
+1. Instale dependências e prepare husky:
+
+```bash
+npm install
+npm run prepare
+npm run install-hooks
+```
+
+2. O script de pre-commit (`tools/pre-commit-checks.sh`) impede commits com arquivos maiores que 50MB. Você pode ajustar o limite conforme necessário.
+
+3. Se você realmente precisa versionar arquivos grandes, considere usar Git LFS. Veja `.gitattributes` para exemplos comentados.

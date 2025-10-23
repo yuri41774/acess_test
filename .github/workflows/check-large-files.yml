@@ -1,0 +1,27 @@
+name: Check large files
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Find big files
+        run: |
+          set -e
+          MAX=100000000
+          problems=0
+          git ls-files -z | xargs -0 -n1 stat -c '%s %n' | while read -r size path; do
+            if [ "$size" -gt "$MAX" ]; then
+              echo "File too large: $path ($size bytes)"
+              problems=1
+            fi
+          done
+          if [ "$problems" -eq 1 ]; then
+            echo "One or more files exceed ${MAX} bytes. Remove them or use Git LFS."
+            exit 1
+          fi
