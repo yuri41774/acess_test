@@ -371,6 +371,8 @@
           <button type="button" onclick="adicionarTela()">Adicionar Tela ao Relatório</button>
           <button type="button" class="secondary" onclick="gerarPDF()">Gerar Relatório em PDF</button>
           <button type="reset" class="secondary">Limpar</button>
+          <button type="button" class="secondary" onclick="runFullA11yChecks()">Executar checagens</button>
+          <button type="button" class="secondary" onclick="exportLastAxeResults()">Exportar JSON</button>
         </div>
       </form>
 
@@ -380,6 +382,13 @@
         <h2>📊 Telas Testadas</h2>
         <div id="telasContainer">
           <!-- Telas serão inseridas aqui dinamicamente -->
+        </div>
+      </section>
+
+      <section id="a11yResults" aria-label="Resultados de acessibilidade" style="margin-top:18px;">
+        <h2>🔎 Resultados das Checagens</h2>
+        <div id="a11yContainer">
+          <p class="info">Nenhuma checagem executada ainda.</p>
         </div>
       </section>
     </main>
@@ -521,45 +530,83 @@
     // Renderização da lista de telas
     function renderTelas() {
       const container = document.getElementById('telasContainer');
-      container.innerHTML = telas.length === 0 
-        ? '<p>Nenhuma tela testada ainda.</p>'
-        : telas.map((tela, idx) => `
-          <article class="tela-item">
-            <div class="tela-header">
-              <h3 class="tela-titulo">${idx + 1}. ${tela.nomeTela}</h3>
-              <div class="tela-acoes">
-                <button type="button" onclick="editarTela(${idx})" aria-label="Editar ${tela.nomeTela}" class="secondary">✏️ Editar</button>
-                <button type="button" onclick="confirmRemover(${idx})" aria-label="Remover ${tela.nomeTela}" class="secondary">🗑️ Remover</button>
-              </div>
-            </div>
-            <div class="tela-conteudo">
-              <div class="tela-campo">
-                <h4>🔊 Leitor de Tela</h4>
-                <p>${tela.leitor}</p>
-              </div>
-              <div class="tela-campo">
-                <h4>🎨 Contraste</h4>
-                <p>${tela.contraste}</p>
-              </div>
-              <div class="tela-campo">
-                <h4>🔍 Ampliação</h4>
-                <p>${tela.ampliacao}</p>
-              </div>
-              <div class="tela-campo">
-                <h4>⌨️ Navegação por Teclado</h4>
-                <p>${tela.teclado}</p>
-              </div>
-              <div class="tela-campo">
-                <h4>🌈 Uso de Cores</h4>
-                <p>${tela.cores}</p>
-              </div>
-              <div class="tela-campo">
-                <h4>📱 Responsividade</h4>
-                <p>${tela.responsivo}</p>
-              </div>
-            </div>
-          </article>
-        `).join('');
+      container.innerHTML = '';
+      if (telas.length === 0) {
+        const p = document.createElement('p');
+        p.textContent = 'Nenhuma tela testada ainda.';
+        container.appendChild(p);
+        return;
+      }
+
+      telas.forEach((tela, idx) => {
+        const article = document.createElement('article');
+        article.className = 'tela-item';
+
+        const header = document.createElement('div');
+        header.className = 'tela-header';
+
+        const title = document.createElement('h3');
+        title.className = 'tela-titulo';
+        title.textContent = `${idx + 1}. ${tela.nomeTela}`;
+
+        const actions = document.createElement('div');
+        actions.className = 'tela-acoes';
+
+  const btnEdit = document.createElement('button');
+        btnEdit.type = 'button';
+        btnEdit.className = 'secondary';
+        btnEdit.setAttribute('aria-label', `Editar ${tela.nomeTela}`);
+        btnEdit.textContent = '✏️ Editar';
+        btnEdit.addEventListener('click', () => editarTela(idx));
+
+        const btnRemove = document.createElement('button');
+        btnRemove.type = 'button';
+        btnRemove.className = 'secondary';
+        btnRemove.setAttribute('aria-label', `Remover ${tela.nomeTela}`);
+        btnRemove.textContent = '🗑️ Remover';
+        btnRemove.addEventListener('click', () => confirmRemover(idx));
+
+  const btnReval = document.createElement('button');
+  btnReval.type = 'button';
+  btnReval.className = 'secondary';
+  btnReval.setAttribute('aria-label', `Revalidar ${tela.nomeTela}`);
+  btnReval.textContent = '🔁 Revalidar';
+  btnReval.addEventListener('click', () => revalidateTela(idx, article));
+
+  actions.appendChild(btnReval);
+
+        actions.appendChild(btnEdit);
+        actions.appendChild(btnRemove);
+
+        header.appendChild(title);
+        header.appendChild(actions);
+
+        const content = document.createElement('div');
+        content.className = 'tela-conteudo';
+
+        const addCampo = (labelText, valueText) => {
+          const campo = document.createElement('div');
+          campo.className = 'tela-campo';
+          const h4 = document.createElement('h4');
+          h4.textContent = labelText;
+          const p = document.createElement('p');
+          p.textContent = valueText;
+          campo.appendChild(h4);
+          campo.appendChild(p);
+          return campo;
+        };
+
+        content.appendChild(addCampo('🔊 Leitor de Tela', tela.leitor));
+        content.appendChild(addCampo('🎨 Contraste', tela.contraste));
+        content.appendChild(addCampo('🔍 Ampliação', tela.ampliacao));
+        content.appendChild(addCampo('⌨️ Navegação por Teclado', tela.teclado));
+        content.appendChild(addCampo('🌈 Uso de Cores', tela.cores));
+        content.appendChild(addCampo('📱 Responsividade', tela.responsivo));
+
+        article.appendChild(header);
+        article.appendChild(content);
+        container.appendChild(article);
+      });
     }
 
     // Feedback visual
@@ -786,6 +833,287 @@
         pendingRemoveIndex = null;
       }
     });
+
+    // =====================
+    // Accessibility checks
+    // =====================
+    async function runFullA11yChecks() {
+      const a11yContainer = document.getElementById('a11yContainer');
+      a11yContainer.innerHTML = '';
+
+      // axe-core run
+      if (typeof axe !== 'undefined') {
+        try {
+          const results = await axe.run();
+          lastAxeResults = results;
+          try { localStorage.setItem('lastAxeResults', JSON.stringify(results)); } catch(e){}
+          const summary = document.createElement('div');
+          summary.className = 'info';
+          summary.textContent = `axe-core: ${results.violations.length} violações encontradas, ${results.passes.length} passes, ${results.incomplete.length} incompletos.`;
+          a11yContainer.appendChild(summary);
+
+          // render violations in-page
+          renderAxeDetails(results, a11yContainer);
+        } catch (err) {
+          const p = document.createElement('p'); p.className = 'erro'; p.textContent = 'Erro ao executar axe: ' + (err.message || err);
+          a11yContainer.appendChild(p);
+        }
+      } else {
+        const p = document.createElement('p'); p.className = 'info'; p.textContent = 'axe-core não encontrado (CDN não carregado).';
+        a11yContainer.appendChild(p);
+      }
+
+      // Contrast checks (robust) across visible text elements
+      try {
+        const contrastResults = findTextElementsAndCheckContrast();
+        const crHeading = document.createElement('h4');
+        crHeading.textContent = 'Contraste (checagem automática)';
+        a11yContainer.appendChild(crHeading);
+        if (contrastResults.length === 0) {
+          const p = document.createElement('p'); p.className = 'info'; p.textContent = 'Nenhum texto detectado para avaliação de contraste.';
+          a11yContainer.appendChild(p);
+        } else {
+          const failing = contrastResults.filter(r => !r.passes);
+          const summary2 = document.createElement('p');
+          summary2.textContent = `Analisados ${contrastResults.length} elementos. ${failing.length} com contraste insuficiente.`;
+          a11yContainer.appendChild(summary2);
+
+          if (failing.length > 0) {
+            const ul2 = document.createElement('ul');
+            failing.slice(0, 20).forEach(r => {
+              const li = document.createElement('li');
+              li.textContent = `${r.selector} — ratio: ${r.ratio.toFixed(2)} — exigido: ${r.required}`;
+              ul2.appendChild(li);
+            });
+            a11yContainer.appendChild(ul2);
+          }
+        }
+      } catch (err) {
+        console.warn('Erro na checagem de contraste:', err);
+      }
+    }
+
+    // Contrast utilities
+    function sRGBtoLin(v) {
+      v = v / 255;
+      return v <= 0.03928 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4);
+    }
+
+    function luminance(r, g, b) {
+      return 0.2126 * sRGBtoLin(r) + 0.7152 * sRGBtoLin(g) + 0.0722 * sRGBtoLin(b);
+    }
+
+    function contrastRatio(rgb1, rgb2) {
+      const L1 = luminance(rgb1[0], rgb1[1], rgb1[2]);
+      const L2 = luminance(rgb2[0], rgb2[1], rgb2[2]);
+      const lighter = Math.max(L1, L2);
+      const darker = Math.min(L1, L2);
+      return (lighter + 0.05) / (darker + 0.05);
+    }
+
+    function parseComputedRGB(colorStr) {
+      // colorStr expected like "rgb(34, 40, 49)" or "rgba(...)"
+      const m = colorStr.match(/rgba?\((\d+),\s*(\d+),\s*(\d+)/i);
+      if (m) return [parseInt(m[1],10), parseInt(m[2],10), parseInt(m[3],10)];
+      // fallback: attempt hex
+      const hex = colorStr.replace('#','').trim();
+      if (hex.length === 3) {
+        return [parseInt(hex[0]+hex[0],16), parseInt(hex[1]+hex[1],16), parseInt(hex[2]+hex[2],16)];
+      }
+      if (hex.length === 6) {
+        return [parseInt(hex.slice(0,2),16), parseInt(hex.slice(2,4),16), parseInt(hex.slice(4,6),16)];
+      }
+      return null;
+    }
+
+    function findTextElementsAndCheckContrast() {
+      const nodes = Array.from(document.querySelectorAll('p,span,a,li,button,label,h1,h2,h3,h4,h5,h6,td,th'));
+      const results = [];
+      for (const el of nodes) {
+        try {
+          const style = window.getComputedStyle(el);
+          if (!style || style.visibility === 'hidden' || style.display === 'none' || parseFloat(style.opacity) === 0) continue;
+          const text = el.textContent && el.textContent.trim();
+          if (!text) continue;
+          // get foreground color
+          const fg = parseComputedRGB(style.color);
+          if (!fg) continue;
+          // find background by walking up until non-transparent or detect background-image
+          let bgColor = null;
+          let node = el;
+          let complexBackground = false;
+          while (node && node !== document.documentElement) {
+            const styleNode = window.getComputedStyle(node);
+            const bg = styleNode.backgroundColor;
+            const bgImage = styleNode.backgroundImage;
+            if (bgImage && bgImage !== 'none') {
+              // background-image present; complex case (image/gradient) — mark for manual review
+              complexBackground = true;
+            }
+            if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') { bgColor = bg; break; }
+            node = node.parentElement;
+          }
+          if (!bgColor) bgColor = window.getComputedStyle(document.body).backgroundColor || 'rgb(255,255,255)';
+          const bg = parseComputedRGB(bgColor) || [255,255,255];
+          const ratio = contrastRatio(fg, bg);
+          // determine required ratio (WCAG): 4.5 normal text, 3.0 large text
+          const fontSize = parseFloat(style.fontSize) || 12;
+          const fontWeight = style.fontWeight || '400';
+          const isLarge = fontSize >= 18 || (fontSize >= 14 && parseInt(fontWeight,10) >= 700);
+          const required = isLarge ? 3.0 : 4.5;
+          results.push({ selector: elementSelector(el), ratio, required, passes: ratio >= required, complexBackground });
+        } catch (e) {
+          // ignore individual element errors
+        }
+      }
+      return results;
+    }
+
+    function elementSelector(el) {
+      if (!el) return '';
+      let sel = el.tagName.toLowerCase();
+      if (el.id) sel += `#${el.id}`;
+      else if (el.className) sel += '.' + Array.from(el.classList).slice(0,2).join('.');
+      return sel;
+    }
+
+    function exportLastAxeResults() {
+      const combined = {
+        timestamp: new Date().toISOString(),
+        telas,
+        axe: lastAxeResults || (() => { try { return JSON.parse(localStorage.getItem('lastAxeResults')||'null'); } catch(e){return null;} })(),
+        contrast: (() => { try { return findTextElementsAndCheckContrast(); } catch(e){return null;} })()
+      };
+      if (!combined.axe && !combined.contrast) {
+        mostrarFeedback('Nenhum resultado disponível para exportar', 'erro');
+        return;
+      }
+      const blob = new Blob([JSON.stringify(combined, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'a11y-report.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      mostrarFeedback('Relatório de acessibilidade exportado', 'sucesso');
+    }
+
+    function renderAxeDetails(results, container) {
+      if (!results || !results.violations) return;
+      const violations = results.violations;
+      if (violations.length === 0) {
+        const p = document.createElement('p'); p.className = 'sucesso'; p.textContent = 'Nenhuma violação encontrada pelo axe-core.';
+        container.appendChild(p);
+        return;
+      }
+      const list = document.createElement('div');
+      list.setAttribute('aria-live','polite');
+      violations.forEach(v => {
+        const section = document.createElement('section');
+        section.style.borderTop = '1px solid var(--border)';
+        section.style.padding = '8px 0';
+        const title = document.createElement('h4');
+        title.textContent = `${v.id} — ${v.impact || 'impacto não informado'} — ${v.help}`;
+        section.appendChild(title);
+        const desc = document.createElement('p');
+        desc.textContent = v.description || v.help || '';
+        section.appendChild(desc);
+        const ul = document.createElement('ul');
+        v.nodes.slice(0,10).forEach(node => {
+          const li = document.createElement('li');
+          const sel = node.target && node.target.join(', ');
+          li.textContent = sel || (node.html ? node.html.substring(0,120) : 'elemento');
+          ul.appendChild(li);
+        });
+        section.appendChild(ul);
+        // link to debug in console
+        const dbg = document.createElement('button'); dbg.type = 'button'; dbg.textContent = 'Log details';
+        dbg.addEventListener('click', () => console.log(v));
+        section.appendChild(dbg);
+        list.appendChild(section);
+      });
+      container.appendChild(list);
+    }
+
+    // Revalidate a specific tela (element scope)
+    async function revalidateTela(index, articleEl) {
+      // locate container for this tela to show results
+      try {
+        const resultArea = document.createElement('div');
+        resultArea.style.marginTop = '8px';
+        resultArea.className = 'a11y-tela-results';
+        // run axe on the subtree if axe is available
+        if (typeof axe !== 'undefined') {
+          try {
+            const results = await axe.run(articleEl);
+            const summary = document.createElement('p');
+            summary.textContent = `axe: ${results.violations.length} violações encontradas.`;
+            resultArea.appendChild(summary);
+            if (results.violations.length > 0) {
+              const ul = document.createElement('ul');
+              results.violations.slice(0,10).forEach(v => {
+                const li = document.createElement('li');
+                li.textContent = `${v.id}: ${v.help}`;
+                ul.appendChild(li);
+              });
+              resultArea.appendChild(ul);
+            }
+          } catch (e) {
+            const p = document.createElement('p'); p.className = 'erro'; p.textContent = 'Erro axe: ' + (e.message || e);
+            resultArea.appendChild(p);
+          }
+        } else {
+          const p = document.createElement('p'); p.className = 'info'; p.textContent = 'axe-core não disponível';
+          resultArea.appendChild(p);
+        }
+
+        // run contrast checks within this article only
+        const elResults = [];
+        const nodes = Array.from(articleEl.querySelectorAll('p,span,a,li,button,label,h1,h2,h3,h4,h5,h6,td,th'));
+        nodes.forEach(n => {
+          try {
+            const style = window.getComputedStyle(n);
+            if (!style || style.visibility === 'hidden' || style.display === 'none' || parseFloat(style.opacity) === 0) return;
+            const fg = parseComputedRGB(style.color);
+            if (!fg) return;
+            let bgColor = null; let node = n;
+            while (node && node !== articleEl && node !== document.documentElement) {
+              const bg = window.getComputedStyle(node).backgroundColor;
+              if (bg && bg !== 'rgba(0, 0, 0, 0)' && bg !== 'transparent') { bgColor = bg; break; }
+              node = node.parentElement;
+            }
+            if (!bgColor) bgColor = window.getComputedStyle(articleEl).backgroundColor || window.getComputedStyle(document.body).backgroundColor;
+            const bg = parseComputedRGB(bgColor) || [255,255,255];
+            const ratio = contrastRatio(fg, bg);
+            const fontSize = parseFloat(style.fontSize) || 12;
+            const fontWeight = style.fontWeight || '400';
+            const isLarge = fontSize >= 18 || (fontSize >= 14 && parseInt(fontWeight,10) >= 700);
+            const required = isLarge ? 3.0 : 4.5;
+            elResults.push({ selector: elementSelector(n), ratio, required, passes: ratio >= required });
+          } catch (e) {}
+        });
+        const failing = elResults.filter(r => !r.passes);
+        const complex = elResults.filter(r => r.complexBackground);
+        const cr = document.createElement('p'); cr.textContent = `Contraste: ${elResults.length} elementos avaliados, ${failing.length} falharam.`;
+        resultArea.appendChild(cr);
+        if (failing.length > 0) {
+          const list = document.createElement('ul');
+          failing.slice(0,10).forEach(f => { const li = document.createElement('li'); li.textContent = `${f.selector} — ${f.ratio.toFixed(2)} (req ${f.required})`; list.appendChild(li); });
+          resultArea.appendChild(list);
+        }
+        if (complex.length > 0) {
+          const warn = document.createElement('p'); warn.className = 'info'; warn.textContent = `${complex.length} elementos possuem background-image/gradiente. Recomenda-se verificação manual ou captura de screenshot para análise de contraste real.`;
+          resultArea.appendChild(warn);
+        }
+
+        // attach result area to article
+        // remove previous results if present
+        const prev = articleEl.querySelector('.a11y-tela-results'); if (prev) prev.remove();
+        articleEl.appendChild(resultArea);
+      } catch (err) {
+        console.error('Revalidate error', err);
+      }
+    }
   </script>
 </body>
 </html>

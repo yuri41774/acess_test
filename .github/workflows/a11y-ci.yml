@@ -1,0 +1,49 @@
+name: Accessibility CI
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+
+jobs:
+  a11y:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: |
+          npm ci || true
+          npm install -g pa11y@6 axe-core@4 @axe-core/cli@4 lighthouse@11 http-server
+
+      - name: Start server
+        run: |
+          npx http-server -p 8080 &
+          sleep 2
+
+      - name: Run pa11y (HTML report)
+        run: |
+          pa11y http://127.0.0.1:8080/index.html --reporter html > pa11y-report.html || true
+
+      - name: Run axe-core CLI (json)
+        run: |
+          npx axe https://127.0.0.1:8080/index.html --save ./axe-results.json || true
+
+      - name: Run Lighthouse (HTML)
+        run: |
+          lighthouse http://127.0.0.1:8080/index.html --output html --output-path=./lighthouse-report.html --quiet --chrome-flags='--no-sandbox --headless' || true
+
+      - name: Upload reports
+        uses: actions/upload-artifact@v4
+        with:
+          name: a11y-reports
+          path: |
+            pa11y-report.html
+            axe-results.json
+            lighthouse-report.html
